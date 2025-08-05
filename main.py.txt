@@ -4,12 +4,12 @@ import pandas as pd
 import datetime
 import telegram
 
-# Telegram 設定（從 GitHub Secrets 讀取）
+# Telegram 設定
 TELEGRAM_TOKEN = os.environ['TELEGRAM_TOKEN']
 CHAT_ID = os.environ['TELEGRAM_CHAT_ID']
 bot = telegram.Bot(token=TELEGRAM_TOKEN)
 
-# 取得股票清單
+# 取得上市股票清單
 def fetch_stock_list():
     url = 'https://api.finmindtrade.com/api/v4/data'
     params = {'dataset': 'TaiwanStockInfo'}
@@ -18,7 +18,7 @@ def fetch_stock_list():
     df = pd.DataFrame(data)
     return df[df['type'] == '上市']['stock_id'].tolist()
 
-# 取得個股歷史資料
+# 抓取個股歷史資料
 def fetch_stock_data(stock_id, start_date, end_date):
     url = 'https://api.finmindtrade.com/api/v4/data'
     params = {
@@ -33,7 +33,7 @@ def fetch_stock_data(stock_id, start_date, end_date):
         return pd.DataFrame(data)
     return None
 
-# 昨多交叉策略（紅K + 放量 + 站上5MA）
+# 多方條件：昨日紅K + 放量 + 突破均線
 def is_bullish_candidate(df):
     if len(df) < 7:
         return False
@@ -44,7 +44,7 @@ def is_bullish_candidate(df):
         row['close'] > df['close'][-7:-2].rolling(window=5).mean().iloc[-2]
     )
 
-# 昨空交叉策略（黑K + 放量 + 跌破5MA）
+# 空方條件：昨日黑K + 放量 + 跌破均線
 def is_bearish_candidate(df):
     if len(df) < 7:
         return False
@@ -55,6 +55,7 @@ def is_bearish_candidate(df):
         row['close'] < df['close'][-7:-2].rolling(window=5).mean().iloc[-2]
     )
 
+# 主流程
 def main():
     today = datetime.date.today()
     yesterday = today - datetime.timedelta(days=1)
@@ -74,12 +75,12 @@ def main():
                     long_list.append(stock)
                 elif is_bearish_candidate(df):
                     short_list.append(stock)
-            except:
+            except Exception:
                 continue
 
-    msg = f"📈 台股交叉策略選股（{yesterday}）\\n\\n"
-    msg += "🔥【昨多強勢股】:\\n" + ("\\n".join(long_list) if long_list else "無") + "\\n\\n"
-    msg += "❄️【昨空弱勢股】:\\n" + ("\\n".join(short_list) if short_list else "無")
+    msg = f"📈 台股交叉策略選股（{yesterday}）\n\n"
+    msg += "🔥【昨多強勢股】:\n" + ("\n".join(long_list) if long_list else "無") + "\n\n"
+    msg += "❄️【昨空弱勢股】:\n" + ("\n".join(short_list) if short_list else "無")
     bot.send_message(chat_id=CHAT_ID, text=msg)
 
 if __name__ == '__main__':
